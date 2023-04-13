@@ -35,7 +35,7 @@ The regression model with log-log transformation on both sides is the best fit f
 # Problem 2: Box Cox Transformation
 In this problem, we used the ozone dataset from the faraway library to fit a model for O3 as the response and temp, humidity, and ibh as predictors. We used the Box-Cox plot to find the best transformation on the response.
 
-#Problem 3: Feature Selection
+# Problem 3: Feature Selection
 
 Feature Selection Methods
 This task deals with the Boston dataset in the ISLR2 package. We will try to predict the per capita crime rate.
@@ -56,7 +56,7 @@ Forward Stepwise with Mallows Cp
 
 
 
-#Problem 4: Cross Validation
+# Problem 4: Cross Validation
 
 In this task, we will perform a regression of the form Y ~ Pd_k=1 Xk and use cross-validation as a method to identify the optimal d. We will implement the cross-validation method.
 
