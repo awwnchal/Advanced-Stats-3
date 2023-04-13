@@ -1,0 +1,666 @@
+---
+title: "Advanced Statistics"
+author: "Anchal Chaudhary" 
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+
+```{r}
+
+library(pwr)
+library(psych)
+library(ggplot2)
+library(dplyr)
+library(EnvStats)
+library(tidyr)
+library(reshape2)
+library(stats)
+library(PMCMRplus)
+library(PASWR2)
+library(lmtest)
+library(ecm)
+library(sandwich)
+library(corrplot)
+library(ISLR)
+
+#library(moments)
+library(ISLR)
+library(car)
+library(faraway)
+library(MASS)
+
+#install.packages('Hmisc')
+```
+
+
+# Non constant variance.
+
+### Q1
+
+```{r}
+
+# Data
+data(pipeline)
+
+#defining a data frame
+pipe_df <- data.frame(pipeline)
+
+#defining variables 
+Lab <- pipe_df$Lab
+Field <- pipe_df$Field
+
+#Fit the regression model
+model1 <- lm(Lab ~ Field, data = pipeline)
+summary(model1)
+
+#plot
+plot(model1)
+
+```
+
+INTERPRETATION:
+
+From the residuals vs fitted plot, we observe that the spread of the residuals grows larger and larger as the fitted values increase (cone shaped). This is a typical sign of non-constant variance.
+
+This tells us that our regression model suffers from non-constant variance of residuals and thus the estimates for the model coefficients aren’t reliable.
+
+### Q2
+
+```{r}
+
+# Apply log transformation to Field
+Field_log <- log(Field)
+Lab_log <- log(Lab)
+
+# Apply log transformation to Field
+Field_sqrt <- sqrt(Field)
+Lab_sqrt <- sqrt(Lab)
+
+# Apply log transformation to Field
+Field_inv <- (1/Field)
+Lab_inv <- (1/Lab)
+
+#observe the plot of x vs y
+plot(Field, Lab)
+plot(Field_log, Lab_log)
+plot(Field, Lab_inv)
+plot(Field_inv, Lab_inv)
+plot(Field, Lab_sqrt)
+plot(Field_sqrt, Lab_sqrt)
+
+
+```
+INTERPRETATION:
+
+On eyeballing, we see that the plot of log - log transformation is much linear than the rest. Hence we will construct the model with log transformation on both sides  
+
+
+```{r}
+
+# Fit the regression model on the transformed data
+model1_transform <- lm(Lab_log ~ Field_log, data = pipeline)
+summary(model1_transform)
+
+# Plot the residuals against the fitted values
+ggplot(model1_transform, aes(x = .fitted, y = .resid)) + 
+  geom_point() + 
+  geom_hline(yintercept = 0, color = "red")
+
+
+```
+
+
+INTERPRETATION:
+
+The log - log transformation fixes the problem of non-constant variance as we observe that from the fitted vs residual plot, the residuals are evenly spread across on both sides of the line and we also do not observe any patter as before.
+
+
+# Box Cox Transformation
+
+### Q1
+
+```{r}
+
+
+#Data
+data(ozone)
+
+#defining a data frame
+ozone_df <- data.frame(ozone)
+
+# defining variables 
+O3 <- ozone_df$O3
+temp <- ozone_df$temp
+humidity <- ozone_df$humidity
+ibh <- ozone_df$ibh
+
+# Fitting a linear model with O3 as response and temp, humidity and ibh as predictors
+model2 <- lm(O3 ~ temp + humidity + ibh)
+summary(model2)
+
+#plot
+ggplot(model2, aes(x = .fitted, y = .resid)) + 
+  geom_point() + 
+  geom_hline(yintercept = 0, color = "red") + geom_smooth()
+
+# Use the Box-Cox plot to find the best transformation on the response
+boxcox_fit <- boxcox(model2, plotit = TRUE)
+boxcox(model2, lambda=seq(0,0.5,by=0.1))
+
+# finding the exact value of lambda
+lambda <- boxcox_fit$x[which.max(boxcox_fit$y)]
+lambda
+
+
+```
+
+INTERPRETATION:
+
+From the residuals vs fitted plot there seems to be some sort of non constant variance. This means we need to perform some transformations for which we will take the help of Box Cox method to decide on how to transform your response variable.
+
+
+```{r}
+
+#model after transformation...we will use lamda to be 0.3 (since its close to it)
+model2_transform <- lm((O3)^(lambda) ~ temp + humidity + ibh)
+summary(model2_transform)
+
+
+
+#plot of the transformed model
+ggplot(model2_transform, aes(x = .fitted, y = .resid)) + 
+  geom_point() + 
+  geom_hline(yintercept = 0, color = "red") + geom_smooth()
+
+
+```
+
+INTERPRETATION:
+
+Now looking at the Residuals vs fitted plot of the transformed model, we observe that the residuals are evenly spread across on both sides of the line and also we do not observe any pattern as before
+
+
+# Variable Selection
+
+# 3.1
+Read this data into a R dataframe, and plot them using a scatterplot
+matrix (pairs) and using gg plot. Describe the dataset.
+Comment on the correlations between predictors. Based on the pairwise
+plot or ggplot can we say any of the predictors are more important.
+
+```{r}
+library(ISLR2)
+boston_df <- data.frame(Boston)
+
+str(boston_df)
+nrow(Boston)
+ncol(Boston)
+summary(Boston)
+```
+
+Boston dataset contains 14 variables and 506 observations. 2 variables are interval type and rest are numeric.
+
+```{r}
+pairs(boston_df)
+
+library(car)
+vars <- c("crim", "dis", "zn", "medv", "rm", "chas")
+pairs(boston_df[,vars])
+
+vars <- c("crim", "ptratio", "rad", "tax", "lstat", "age", "nox", "indus")
+pairs(boston_df[,vars])
+
+library(ggplot2)
+library(reshape2)
+# plot each feature against crim rate
+bosmelt <- melt(Boston, id="crim")
+ggplot(bosmelt, aes(x=value, y=crim))+
+  facet_wrap(~variable, scales="free")+
+  geom_point()
+
+```
+
+crime rate seems to be correlated with medv - it could be an important predictor to predict crime rate.
+
+medv and rm seems to have a positive linear correlation.
+
+crime rates are higher for a value of indus, zn, tax, ptratio, rad and chas.
+
+```{r}
+library(ggplot2)
+ggplot(boston_df, aes(x=zn, y=crim))+geom_point(color = "blue") + geom_smooth(color = "red")
+ggplot(boston_df, aes(x=rm, y=crim))+geom_point(color = "blue") + geom_smooth(color = "red")
+ggplot(boston_df, aes(x=rad, y=crim))+geom_point(color = "blue") + geom_smooth(color = "red")
+ggplot(boston_df, aes(x=lstat, y=crim))+geom_point(color = "blue") + geom_smooth(color = "red")
+ggplot(boston_df, aes(x=nox, y=crim))+geom_point(color = "blue") + geom_smooth(color = "red")
+ggplot(boston_df, aes(x=medv, y=crim))+geom_point(color = "blue") + geom_smooth(color = "red")
+ggplot(boston_df, aes(x=ptratio, y=crim))+geom_point(color = "blue") + geom_smooth(color = "red")
+```
+
+from the above plots rm, lstat, nox and medv seems important variables to predict crim
+
+```{r}
+cor_matrix <- cor(boston_df)
+cor_matrix[1,]
+#install.packages('gplots')
+library(gplots)
+heatmap.2(cor_matrix,  dendrogram = "none", 
+          annotation_col = cor_matrix, 
+          annotation_colors = colorRampPalette(c("white", "black"))(50), 
+          margins = c(5,5), cexRow = 1, cexCol = 1, 
+          keysize = 1.5, trace = "none",
+          main = "Correlation Matrix Heatmap",
+          density.info = "none",
+          annotation_custom = round(cor_matrix, 2))
+
+```
+
+rad and tax are positively correlated to crim. rad and tax are correlated
+
+
+# 3.2
+Fit a multiple regression model between y and the other variables as
+predictors. Evaluate the coefficients using summary(), and summarize
+what you have learned. What are the significance of p values?
+```{r}
+lm_model <- lm(crim ~ .,data = boston_df)
+summary(lm_model)
+```
+
+The p-values for each predictor show the statistical significance of each predictor in the model. A p-value of less than 0.05 indicates that there is a strong evidence that the predictor is important in explaining the outcome (in this case crim).
+
+The residual standard error is 6.46, which indicates the average difference between the observed crim values and the values predicted by the model. The multiple R-squared of 0.4493 means that 45% of the variation in crim can be explained by the predictors in the model
+
+Based on the p-values, some of the predictors that have strong evidence of being important are zn (zoned), dis (distance to employment), rad (index of accessibility) and medv (median value of owner-occupied homes).
+
+# 3.3
+Comment on the interpretation of the coefficients of the predictors.
+Which predictors are more important ? Can we say about the importance
+of predictors from the coefficient values ? (Assume you dont
+know about feature selection methods for this sub question)
+
+The coefficients of the predictors in a linear regression model represent the change in the response variable, "crim", associated with a one-unit change in the predictor variable, while holding all other predictor variables constant. The magnitude and sign of the coefficients can be used to infer the relative importance of the predictors in explaining the variation in the response variable.
+
+However, it is not appropriate to say that the importance of predictors can be solely determined by their coefficient values. While larger magnitude coefficients indicate stronger relationships between the predictors and the response, it does not take into account the variability of the predictors and the potential for multicollinearity, which can inflate the magnitude of the coefficients.
+
+In this case, based on the magnitude of the coefficients, "dis" (-1.0122467), "medv" (-0.2200564), and "rad" (0.6124653) seem to be the most important predictors in explaining the variation in "crim". However, this conclusion should be further confirmed with other feature selection methods and model diagnostics.
+
+# 3.4
+Perform feature selection using the following methods by splitting the
+data set by random splitting into into 2 parts - 80 % of the dataset as
+training data set and 20 % of the test set. Compare the performance
+of the ’reduced’ models on the test dataset.
+• Forward Stepwise with p-value threshold of 0.1
+• Backward Stepwise with p-value threshold of 0.1
+• AIC
+• BIC
+• Mallows Cp
+
+```{r}
+library(caret)
+set.seed(123)
+split_index <- createDataPartition(boston_df$crim, p = 0.8, list = FALSE)
+train_data <- boston_df[split_index, ]
+test_data <- boston_df[-split_index, ]
+```
+
+```{r}
+library(olsrr)
+#install.packages('olsrr')
+model_full_train = lm(crim ~., data=train_data) 
+summary(model_full_train)
+
+
+# Perform forward selection with a p-value threshold of 0.1
+model_forward <- ols_step_forward_p(model_full_train, penter=0.1 , details = TRUE)
+
+# found rad and lstat for the final model
+
+#training on rad and lstat
+model_forward_reduced_train <- lm(crim ~ rad + lstat, data=train_data)
+summary(model_forward_reduced_train)
+
+#testing
+forward_predicted_crim <- predict(model_forward_reduced_train, test_data)
+```
+
+```{r}
+# Perform backward selection with a p-value threshold of 0.1
+model_backward <- ols_step_backward_p(model_full_train, penter=0.1 , details = TRUE)
+
+# rm, chas, age, indus, tax - removed
+
+#training on remaining
+model_backward_reduced_train <- lm(crim ~ zn + nox + dis + rad + ptratio + lstat + medv, data=train_data)
+summary(model_backward_reduced_train)
+
+#testing
+backward_predicted_crim <- predict(model_backward_reduced_train, test_data)
+```
+```{r}
+# AIC
+
+# Load libraries
+library(MASS)
+
+# Perform feature selection using AIC
+model_selected_AIC <- stepAIC(model_full_train)
+
+# model with lowest AIC: crim ~ zn + nox + dis + rad + ptratio + lstat + medv
+model_AIC_train <- lm(crim ~ zn + nox + dis + rad + ptratio + lstat + medv, data = train_data)
+
+# testing
+predictions_AIC <- predict(model_AIC_train, newdata = test_data)
+
+```
+
+```{r}
+# BIC
+
+model_BIC <- step(model_full_train, scope = list(lower = crim ~ 1, upper = crim ~ .), direction = "both", k = log(nrow(train_data)))
+
+# model selected: crim ~ zn + dis + rad + medv
+model_BIC_train <- lm(crim ~ zn + dis + rad + medv, data = train_data)
+
+#testing
+predictions_BIC <- predict(model_BIC_train, test_data)
+```
+
+```{r}
+# mallows cp
+step_model_mallows <- ols_step_forward_p(model_full_train, cp_metric = "Mallows")
+predictions_mcp <- predict(step_model_mallows$model, newdata = test_data)
+```
+
+```{r}
+#model comparison
+
+r_sq_forward <- 1 - (sum( (test_data$crim - forward_predicted_crim )^2 ) / sum((test_data$crim - mean(train_data$crim))^2 ))
+r_sq_forward
+
+r_sq_backward <- 1 - (sum( (test_data$crim - backward_predicted_crim )^2 ) / sum((test_data$crim - mean(train_data$crim))^2 ))
+r_sq_backward
+
+r_sq_aic <- 1 - (sum( (test_data$crim - predictions_AIC )^2 ) / sum((test_data$crim - mean(train_data$crim))^2 ))
+r_sq_aic
+
+r_sq_bic <- 1 - (sum( (test_data$crim - predictions_BIC )^2 ) / sum((test_data$crim - mean(train_data$crim))^2 ))
+r_sq_bic
+
+r_sq_mcp <- 1 - (sum( (test_data$crim - predictions_mcp )^2 ) / sum((test_data$crim - mean(train_data$crim))^2 ))
+r_sq_mcp
+```
+
+these are OOS r squared for forward, backward, AIC, BIC, Mallows cp respectively.
+
+we see maximum r sq for backward, AIC and mallows cp.
+
+# 3.5
+
+For feature selection, there are different methods that can be used. The 5 methods mentioned are:
+
+Forward Stepwise with p-value threshold of 0.1: In this method, the algorithm starts with no features and adds one feature at a time based on a p-value threshold of 0.1. Features with a p-value greater than 0.1 are kept in the model, and the process is repeated until all p-values are less than 0.1.
+Backward Stepwise with p-value threshold of 0.1: In this method, the algorithm starts with all features and removes one feature at a time based on a p-value threshold of 0.1. Features with a p-value less than 0.1 are kept in the model, and the process is repeated until all p-values are greater than 0.1.
+AIC: The Akaike Information Criteria (AIC) measures the goodness of fit of a model and the complexity of the model. A model with a lower AIC is preferred, and the feature selection process involves keeping the features that result in the lowest AIC.
+BIC: The Bayesian Information Criteria (BIC) is similar to AIC but places a greater penalty on the complexity of the model. A model with a lower BIC is preferred, and the feature selection process involves keeping the features that result in the lowest BIC.
+Mallows Cp: Mallows Cp is a goodness of fit measure that is used to select the most parsimonious models. The feature selection process involves keeping the features that result in the lowest Mallows Cp value.
+The choice of method for feature selection depends on the specific problem and the goals of the analysis. For example, if the goal is to have a parsimonious model with a lower number of features, then AIC or BIC might be preferred. If the goal is to have a model that has a good balance between goodness of fit and complexity, then Mallows Cp might be preferred. The choice of method also depends on the data and the type of relationship between the features and the response variable.
+
+One method might select certain features over others because it gives more weight to certain criteria such as goodness of fit, complexity, or parsimony. Each method has its own unique set of assumptions and trade-offs, and the results of the feature selection process will depend on the specific problem and the method used.
+
+
+
+
+# Cross Validation
+
+```{r}
+
+#Part 1
+n = 10000
+x = runif(n, min = 0, max = 1)
+e = rnorm(n, mean = 0, sd = 0.5)
+y = 3*(x^5) + 2*(x^2) + e
+
+lm_ideal =  lm(y ~ x)
+plot(lm_ideal)
+
+#Create a dataframe with x and y values
+df = data.frame(x,y)
+
+
+
+#Part 2
+
+#Splitting the data into test train sets
+
+#Cross validation
+library(caTools)
+
+#make this example reproducible
+set.seed(1)
+
+#use 80% of dataset as training set and 20% as test set
+new_sample <- sample.split(df$x, SplitRatio = 0.8)
+new_train  <- subset(df, new_sample == TRUE)
+new_test   <- subset(df, new_sample == FALSE)
+
+```
+```{r}
+#Part 3
+# 5 fold cross validation on the data to find optimal d value
+avg_mse = c()
+new_train_folds = new_train[sample(nrow(new_train)),]
+folds = cut(seq(1,nrow(new_train)),breaks=5,labels=FALSE)
+
+for(d in 1:10){
+  mse = c()
+  #d  = 2
+   for(i in 1:5){
+    #print(i)
+    validIndexes = which(folds==i,arr.ind=TRUE)
+    validData = new_train_folds[validIndexes, ]
+    trainData = new_train_folds[-validIndexes, ]
+    
+    #Cross validation MSE calculation
+    model = lm(y~ poly(x,d), data = trainData)
+    pred = predict(model, newdata = validData)
+    mse[i] = mean((pred - validData$y)^2)
+   }
+   avg_mse[d] = mean(mse)
+ }
+
+#Finding the optimal mse
+which.min(avg_mse)
+
+#Plotting MSE as a function of d
+plot(avg_mse)
+
+# As you can see the optimal MSE, happens to be when d = 10
+  
+  
+
+
+```
+
+```{r}
+#Part 4
+mse_train = c()
+mse_test = c()
+for(d in 1:10){
+
+    model = lm(y ~ poly(x,d), data = new_train)
+    model_sum = summary(model)
+    pred = predict(model, newdata = new_test)
+    
+    mse_train[d] = mean(model_sum$residuals^2)
+    mse_test[d] = mean((pred - new_test$y)^2)
+   
+    
+ }
+
+#Finding the optimal mse_train
+which.min(mse_train)
+
+#Finding the optimal mse_test
+which.min(mse_test)
+
+#Plotting MSE test and train as a function of d
+#plot(avg_mse)
+plot(mse_test)
+plot(mse_train)
+
+# On training data, d = 10 has the lowest mse but on testing data d = 4 has the lowest mse
+
+```
+
+
+# Bias Variance Tradeoff
+
+### Q1
+
+```{r}
+
+# function to generate the random y-values
+n <- 100
+get_y <- function(p){ return(3*p^5+2*p^2 + rnorm(100,0,1))}
+      
+# seed for reproducibility
+set.seed(12345)
+pred_y <- matrix(0, ncol = 10, nrow = 1000)
+      
+# generate 1000 data sets, fit models, and compute predicted y
+for (i in 1:1000)
+    {
+            
+      X <- runif(n,min=0,max=1)
+      df <- data.frame(x = X, y = get_y(X))
+      d <- 1:10
+      for (j in d)
+       {
+        mod <- lm(y ~ poly(x,j),data = df)
+        pred_y[i,j] <- predict(mod,data.frame(x=1.01))
+       }
+    }  
+
+```
+
+
+### Q2
+
+
+```{r}
+
+mu_1.01 <- 3*(1.01)^5+2*(1.01)^2
+d <- 1:10
+bias <- matrix(0, ncol = 10, nrow = 1)
+for (j in 1:10)
+  {
+    bias[1,j] <- mean(pred_y[,j]-mu_1.01)
+  }
+bias
+plot(d,abs(bias[1,]),xlab = "Model Complexity (power of polynomial function)",ylab="bias")
+      
+
+```
+
+Interpretation:
+
+For models with power 1-4 the models are unable to take in to consideration the 5th power value of X. Thus the predictions of these models would deviate significantly from true value resulting in high bias but for models with higher power orders i.e 5-10, the  5th power is already taken into consideration thus it leads to lower bias which is quite close to zero.
+
+```{r}
+
+variance <- list()
+for (j in 1:10)
+  {
+    variance[j]<- var(pred_y[,j])
+  }
+
+variance
+plot(1:10,(variance),xlab = "Model Complexity (power of polynomial function)",ylab="variance")
+
+```
+
+Interpretation: 
+
+For models with higher power i.e 5-10, the  5th power has the lowest variance but as the order increases above 5 variance also increases which is due to overfitting of data.
+
+
+### Q3 - Part a
+
+```{r}
+
+# generate 1000 data sets, fit models, and compute predicted y for x=1.01 on unif(0,10)
+     
+for (i in 1:1000)
+    {
+            
+      X <- runif(n,min=0,max=10)
+      df <- data.frame(x = X, y = get_y(X))
+      d <- 1:10
+      for (j in d)
+       {
+              mod <- lm(y~poly(x,j),data = df)
+              pred_y[i,j] <- predict(mod,data.frame(x=1.01))
+       }
+     }  
+
+
+#bias
+for (j in 1:10){ bias[1,j] <- mean(pred_y[,j]-mu_1.01)}
+bias
+plot(d,abs(bias[1,]),xlab = "Model Complexity (power of polynomial function)",ylab="bias")
+
+#variance
+var <- list()
+for (j in 1:10){ var[j] <- var(pred_y[,j])}
+var
+plot(1:10,var,xlab = "Model Complexity (power of polynomial function)",ylab="variance")
+      
+```
+
+As compared to the previous graphs, the shapes for bias and variance with respect to the power of the polynomial function are decreasing. This could be because for the lower power they might be sensitive and they might be underfitted.
+
+### Q3 - Part b
+
+```{r}
+
+# generate 1000 data sets, fit models, and compute predicted y on x=-0.5 on unif(0,10)
+     
+for (i in 1:1000)
+    {
+            
+      X <- runif(n,min=0,max=10)
+      df <- data.frame(x = X, y = get_y(X))
+      d <- 1:10
+      for (j in d)
+          {
+            mod <- lm(y~poly(x,j),data = df)
+            pred_y[i,j] <- predict(mod,data.frame(x= (-0.5)))
+          }
+    }  
+
+
+mu_0.5 <- 3*(-0.5)^5+2*(-0.5)^2
+
+for (j in 1:10){ bias[1,j] <- mean(pred_y[,j] - mu_0.5)}
+bias
+plot(d,abs(bias[1,]),xlab = "Model Complexity (power of polynomial function)",ylab="bias")
+
+#variance
+var <- list()
+for (j in 1:10){ var[j] <- var(pred_y[,j])}
+var
+plot(1:10,var,xlab = "Model Complexity (power of polynomial function)",ylab="variance")
+
+      
+```
+
+This is an out of sample prediction. When compared to the in sample prediction, the graphs the shapes for bias and variance with respect to the power of the polynomial function are quite similar. But in terms of value both variance and bias decreased as the models were developed on a different set and the prediction was on out of sample.
+
+To combat overfitting, cross-validation can be utilized to find the optimal value for "d". This technique provides a more precise evaluation of the model's ability to generalize to new data, reducing the risk of overfitting. Additionally, regularization methods such as Lasso can be used to select an appropriate model. Another solution to overfitting is to enlarge the training set by increasing "n", as the model will have access to more data for learning and will be less susceptible to memorizing random fluctuations in the training data.
+
+
